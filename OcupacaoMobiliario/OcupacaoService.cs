@@ -14,7 +14,8 @@ public class OcupacaoOptions
     public RevitLinkInstance? Link { get; set; }
     public string FamilyFilter { get; set; } = "CADEIRA";
     public Phase Phase { get; set; } = null!;
-    public string? SharedParameterFile { get; set; }
+    public string RoomParameterName { get; set; } = "";
+    public string TotalParameterName { get; set; } = "";
 }
 
 public class OcupacaoResult
@@ -40,31 +41,24 @@ public class OcupacaoResult
 
 public static class OcupacaoService
 {
-    public const string RoomParameterName = "BG_Populacao_ambiente";
-    public const string TotalParameterName = "BG_Populacao_Total";
+    /// <summary>Parâmetros graváveis (inteiro/número) de um elemento, sem repetir nomes.</summary>
+    private static List<string> WritableParameterNames(Element element) =>
+        element.Parameters.Cast<Parameter>()
+            .Where(p => !p.IsReadOnly && p.StorageType is StorageType.Integer or StorageType.Double)
+            .Select(p => p.Definition.Name)
+            .Distinct().OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
 
-    private static readonly (string Name, BuiltInCategory Category)[] RequiredParameters =
+    public static List<string> GetRoomParameterNames(Document doc)
     {
-        (RoomParameterName, BuiltInCategory.OST_Rooms),
-        (TotalParameterName, BuiltInCategory.OST_ProjectInformation),
-    };
-
-    /// <summary>True se os dois parâmetros já estão vinculados às categorias corretas.</summary>
-    public static bool AllParametersBound(Document doc) =>
-        RequiredParameters.All(p => IsBound(doc, p.Name, p.Category));
-
-    private static bool IsBound(Document doc, string name, BuiltInCategory category)
-    {
-        var it = doc.ParameterBindings.ForwardIterator();
-        while (it.MoveNext())
-        {
-            if (it.Key?.Name != name) continue;
-            if (it.Current is ElementBinding eb)
-                foreach (Category c in eb.Categories)
-                    if (c.BuiltInCategory == category) return true;
-        }
-        return false;
+        var room = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms)
+            .WhereElementIsNotElementType().OfType<Room>().FirstOrDefault(r => r.Area > 0)
+            ?? new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms)
+                .WhereElementIsNotElementType().OfType<Room>().FirstOrDefault();
+        return room == null ? new List<string>() : WritableParameterNames(room);
     }
+
+    public static List<string> GetProjectInfoParameterNames(Document doc) =>
+        WritableParameterNames(doc.ProjectInformation);
 
     public static List<Phase> GetPhases(Document doc) => doc.Phases.Cast<Phase>().ToList();
 
@@ -78,8 +72,6 @@ public static class OcupacaoService
     public static OcupacaoResult Run(Document doc, OcupacaoOptions opt, AppLanguage lang)
     {
         var result = new OcupacaoResult { PhaseName = opt.Phase.Name };
-
-        EnsureParameters(doc, opt.SharedParameterFile, lang);
 
         // Origem: modelo local ou vínculo
         Document sourceDoc;
@@ -138,18 +130,18 @@ public static class OcupacaoService
         {
             var count = counts.GetValueOrDefault(room.Id);
             var roomName = $"{room.Number} {room.Name}".Trim();
-            var p = room.LookupParameter(RoomParameterName);
+            var p = room.LookupParameter(opt.RoomParameterName);
 
             if (p == null)
             {
                 if (count > 0)
-                    result.Warnings.Add($"{roomName}: " + LocalizedStrings.Format(lang, "ErrRoomParamMissing", RoomParameterName));
+                    result.Warnings.Add($"{roomName}: " + LocalizedStrings.Format(lang, "ErrRoomParamMissing", opt.RoomParameterName));
                 continue;
             }
             if (p.IsReadOnly)
             {
                 if (count > 0)
-                    result.Warnings.Add($"{roomName}: " + LocalizedStrings.Format(lang, "ErrReadOnly", RoomParameterName));
+                    result.Warnings.Add($"{roomName}: " + LocalizedStrings.Format(lang, "ErrReadOnly", opt.RoomParameterName));
                 continue;
             }
 
@@ -168,17 +160,17 @@ public static class OcupacaoService
         result.Total = total;
 
         // Total nas Informações de Projeto
-        var pTotal = doc.ProjectInformation.LookupParameter(TotalParameterName);
+        var pTotal = doc.ProjectInformation.LookupParameter(opt.TotalParameterName);
         if (pTotal == null)
-            result.TotalStatus = LocalizedStrings.Format(lang, "ErrTotalMissing", TotalParameterName);
+            result.TotalStatus = LocalizedStrings.Format(lang, "ErrTotalMissing", opt.TotalParameterName);
         else if (pTotal.IsReadOnly)
-            result.TotalStatus = LocalizedStrings.Format(lang, "ErrTotalReadOnly", TotalParameterName);
+            result.TotalStatus = LocalizedStrings.Format(lang, "ErrTotalReadOnly", opt.TotalParameterName);
         else
         {
             try
             {
                 SetCount(pTotal, total);
-                result.TotalStatus = LocalizedStrings.Format(lang, "TotalOk", TotalParameterName);
+                result.TotalStatus = LocalizedStrings.Format(lang, "TotalOk", opt.TotalParameterName);
             }
             catch (Exception ex)
             {
@@ -208,80 +200,6 @@ public static class OcupacaoService
             case StorageType.Double: return p.Set((double)count);
             case StorageType.String: return p.Set(count.ToString());
             default: return false;
-        }
-    }
-
-    /// <summary>Vincula os parâmetros compartilhados às categorias necessárias, se ainda não estiverem.</summary>
-    private static void EnsureParameters(Document doc, string? sharedFile, AppLanguage lang)
-    {
-        var pending = RequiredParameters.Where(p => !IsBound(doc, p.Name, p.Category)).ToList();
-        if (pending.Count == 0) return;
-
-        var app = doc.Application;
-        var previousFile = app.SharedParametersFilename;
-
-        if (string.IsNullOrWhiteSpace(sharedFile) || !File.Exists(sharedFile))
-            throw new UserFacingException(LocalizedStrings.Get(lang, "ErrParamFile"));
-
-        try
-        {
-            app.SharedParametersFilename = sharedFile;
-            var defFile = app.OpenSharedParameterFile()
-                ?? throw new UserFacingException(LocalizedStrings.Get(lang, "ErrParamNoFile"));
-
-            using var tx = new Transaction(doc, "Ocupação - instalar parâmetros");
-            tx.Start();
-
-            foreach (var (name, builtIn) in pending)
-            {
-                var category = Category.GetCategory(doc, builtIn);
-
-                // Parâmetro já no projeto mas em outra categoria: acrescenta a categoria
-                Definition? existing = null;
-                InstanceBinding? existingBinding = null;
-                var it = doc.ParameterBindings.ForwardIterator();
-                while (it.MoveNext())
-                {
-                    if (it.Key?.Name == name && it.Current is InstanceBinding ib)
-                    {
-                        existing = it.Key; existingBinding = ib; break;
-                    }
-                }
-
-                if (existing != null && existingBinding != null)
-                {
-                    var set = app.Create.NewCategorySet();
-                    foreach (Category c in existingBinding.Categories) set.Insert(c);
-                    set.Insert(category);
-                    doc.ParameterBindings.ReInsert(existing, app.Create.NewInstanceBinding(set), GroupTypeId.Data);
-                    continue;
-                }
-
-                Definition? def = null;
-                foreach (DefinitionGroup group in defFile.Groups)
-                {
-                    def = group.Definitions.get_Item(name);
-                    if (def != null) break;
-                }
-                if (def == null)
-                {
-                    tx.RollBack();
-                    throw new UserFacingException(LocalizedStrings.Format(lang, "ErrParamNotInFile", name));
-                }
-
-                var cats = app.Create.NewCategorySet();
-                cats.Insert(category);
-                doc.ParameterBindings.Insert(def, app.Create.NewInstanceBinding(cats), GroupTypeId.Data);
-            }
-
-            tx.Commit();
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(previousFile))
-            {
-                try { app.SharedParametersFilename = previousFile; } catch { }
-            }
         }
     }
 }

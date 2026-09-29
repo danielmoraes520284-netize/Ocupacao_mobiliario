@@ -1,13 +1,11 @@
 using System.Windows;
 using Autodesk.Revit.DB;
-using Microsoft.Win32;
 
 namespace BimBlaster.OcupacaoMobiliario;
 
 public partial class OcupacaoWindow : Window
 {
     private readonly AppLanguage _lang;
-    private readonly bool _paramsMissing;
     private readonly List<RevitLinkInstance> _links;
     private readonly List<Phase> _phases;
 
@@ -26,8 +24,8 @@ public partial class OcupacaoWindow : Window
         SourceLabel.Text = T("SourceLabel");
         FilterLabel.Text = T("FilterLabel");
         PhaseLabel.Text = T("PhaseLabel");
-        ParamFileLabel.Text = T("ParamFileLabel");
-        BrowseButton.Content = T("Browse");
+        RoomParamLabel.Text = T("RoomParamLabel");
+        TotalParamLabel.Text = T("TotalParamLabel");
         CancelButton.Content = T("Cancel");
         RunButton.Content = T("Run");
 
@@ -45,26 +43,19 @@ public partial class OcupacaoWindow : Window
         if (defaultIdx < 0) defaultIdx = _phases.Count - 1;
         if (defaultIdx >= 0) PhaseCombo.SelectedIndex = defaultIdx;
 
-        // Arquivo de parâmetros: só é obrigatório se os parâmetros ainda não existirem
-        _paramsMissing = !OcupacaoService.AllParametersBound(doc);
-        ParamHint.Text = T(_paramsMissing ? "ParamFileHintMissing" : "ParamFileHintOk");
-        var current = doc.Application.SharedParametersFilename;
-        if (!string.IsNullOrWhiteSpace(current) && File.Exists(current))
-            ParamFileBox.Text = current;
+        // Parâmetros graváveis; pré-seleciona os nomes padrão BG_ quando existirem
+        Fill(RoomParamCombo, OcupacaoService.GetRoomParameterNames(doc), "BG_Populacao_ambiente");
+        Fill(TotalParamCombo, OcupacaoService.GetProjectInfoParameterNames(doc), "BG_Populacao_Total");
+    }
+
+    private static void Fill(System.Windows.Controls.ComboBox combo, List<string> names, string preferred)
+    {
+        foreach (var n in names) combo.Items.Add(n);
+        var idx = names.FindIndex(n => n.Equals(preferred, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0) combo.SelectedIndex = idx;
     }
 
     private string T(string key) => LocalizedStrings.Get(_lang, key);
-
-    private void Browse_Click(object sender, RoutedEventArgs e)
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title = T("BrowseTitle"),
-            Filter = "TXT (*.txt)|*.txt",
-            CheckFileExists = true
-        };
-        if (dlg.ShowDialog(this) == true) ParamFileBox.Text = dlg.FileName;
-    }
 
     private void Run_Click(object sender, RoutedEventArgs e)
     {
@@ -78,9 +69,15 @@ public partial class OcupacaoWindow : Window
             MessageBox.Show(this, T("ErrPhaseEmpty"), T("WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        if (_paramsMissing && !File.Exists(ParamFileBox.Text))
+        if (RoomParamCombo.SelectedIndex < 0)
         {
-            MessageBox.Show(this, T("ErrParamFile"), T("WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, RoomParamCombo.Items.Count == 0 ? T("ErrNoRooms") : T("ErrRoomParamEmpty"),
+                T("WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (TotalParamCombo.SelectedIndex < 0)
+        {
+            MessageBox.Show(this, T("ErrTotalParamEmpty"), T("WindowTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -89,7 +86,8 @@ public partial class OcupacaoWindow : Window
             Link = SourceCombo.SelectedIndex > 0 ? _links[SourceCombo.SelectedIndex - 1] : null,
             FamilyFilter = FilterBox.Text.Trim(),
             Phase = _phases[PhaseCombo.SelectedIndex],
-            SharedParameterFile = ParamFileBox.Text
+            RoomParameterName = (string)RoomParamCombo.SelectedItem,
+            TotalParameterName = (string)TotalParamCombo.SelectedItem
         };
         DialogResult = true;
     }
