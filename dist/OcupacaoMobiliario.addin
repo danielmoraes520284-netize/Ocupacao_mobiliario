@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>OcupacaoMobiliario</Name>
+    <Assembly>.\OcupacaoMobiliario\OcupacaoMobiliario.dll</Assembly>
+    <AddInId>7d2c5b1e-4a9f-4c63-b8e0-3f1a92d6c4a7</AddInId>
+    <FullClassName>BimBlaster.OcupacaoMobiliario.OcupacaoMobiliarioApplication</FullClassName>
+    <VendorId>BIMBLASTER</VendorId>
+    <VendorDescription>BIMBLASTER, www.bimblaster.com</VendorDescription>
+  </AddIn>
+</RevitAddIns>

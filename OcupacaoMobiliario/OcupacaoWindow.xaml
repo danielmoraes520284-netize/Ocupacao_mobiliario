@@ -1,0 +1,76 @@
+<Window x:Class="BimBlaster.OcupacaoMobiliario.OcupacaoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="640" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI" FontSize="13">
+    <Grid Margin="28,22,28,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Cabeçalho -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="TitleText" Style="{StaticResource PluginTitleStyle}"/>
+                <TextBlock x:Name="SubtitleText" Foreground="{StaticResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" Margin="0,4,16,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Border Width="30" Height="30" CornerRadius="7" Background="{StaticResource BrandTealBrush}">
+                    <TextBlock Text="B" Foreground="White" FontWeight="Bold" FontSize="18"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" FontSize="16"
+                           Foreground="{StaticResource TextPrimaryBrush}">
+                    <Run Text="BIM" FontWeight="Bold"/><Run Text=" BLASTER"/>
+                </TextBlock>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Height="1" Background="{StaticResource BorderLightBrush}" Margin="0,16,0,16"/>
+
+        <!-- Parâmetros -->
+        <Border Grid.Row="2" Style="{StaticResource PanelCardStyle}">
+            <StackPanel>
+                <TextBlock x:Name="SourceLabel" Style="{StaticResource FieldLabelStyle}"/>
+                <ComboBox x:Name="SourceCombo" Height="28" Margin="0,0,0,14"/>
+
+                <TextBlock x:Name="FilterLabel" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox x:Name="FilterBox" Height="28" Text="CADEIRA" VerticalContentAlignment="Center" Margin="0,0,0,14"/>
+
+                <TextBlock x:Name="PhaseLabel" Style="{StaticResource FieldLabelStyle}"/>
+                <ComboBox x:Name="PhaseCombo" Height="28" Margin="0,0,0,14"/>
+
+                <TextBlock x:Name="ParamFileLabel" Style="{StaticResource FieldLabelStyle}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ParamFileBox" Height="28" VerticalContentAlignment="Center"/>
+                    <Button x:Name="BrowseButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="14,4" Margin="8,0,0,0" Click="Browse_Click"/>
+                </Grid>
+                <TextBlock x:Name="ParamHint" Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Rodapé -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button x:Name="CancelButton" Style="{StaticResource SecondaryButtonStyle}"
+                    MinWidth="110" Margin="0,0,10,0" IsCancel="True" Click="Cancel_Click"/>
+            <Button x:Name="RunButton" Style="{StaticResource PrimaryButtonStyle}"
+                    MinWidth="130" IsDefault="True" Click="Run_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
